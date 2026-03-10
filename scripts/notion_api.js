@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Notion API 客户端 - Node.js 版本
- * 零外部依赖，使用 Node.js 内置模块
+ * Notion API Client - Node.js version
+ * Zero external dependencies, uses Node.js built-in modules only
  */
 
 const https = require('https');
@@ -27,14 +27,14 @@ class NotionAPI {
   }
 
   /**
-   * 统一的 HTTP 请求方法，带重试机制和分块读取
+   * Unified HTTP request method with retry and chunked reading
    * @private
-   * @param {string} url - 请求 URL
-   * @param {string} method - HTTP 方法 (GET/POST/PATCH/DELETE)
-   * @param {Object|null} data - 请求体数据
-   * @param {number} maxRetries - 最大重试次数
-   * @returns {Promise<Object>} API 响应数据
-   * @throws {Error} 网络错误或 API 错误
+   * @param {string} url - Request URL
+   * @param {string} method - HTTP method (GET/POST/PATCH/DELETE)
+   * @param {Object|null} data - Request body data
+   * @param {number} maxRetries - Maximum retry count
+   * @returns {Promise<Object>} API response data
+   * @throws {Error} Network error or API error
    */
   async _request(url, method = 'GET', data = null, maxRetries = 3) {
     const urlObj = new URL(url);
@@ -93,11 +93,11 @@ class NotionAPI {
   }
 
   /**
-   * 搜索页面和数据库
-   * @param {string} query - 搜索关键词，空字符串返回所有可访问内容
-   * @param {string|null} filterType - 过滤类型 ('page' 或 'database')
-   * @param {number} pageSize - 返回结果数量 (最大100)
-   * @returns {Promise<Object>} 搜索结果，包含 results 数组
+   * Search pages and databases
+   * @param {string} query - Search keyword, empty string returns all accessible content
+   * @param {string|null} filterType - Filter type ('page' or 'database')
+   * @param {number} pageSize - Result count (max 100)
+   * @returns {Promise<Object>} Search results containing results array
    */
   async search(query = '', filterType = null, pageSize = 20) {
     const url = `${this.baseUrl}/search`;
@@ -111,9 +111,9 @@ class NotionAPI {
   }
 
   /**
-   * 获取块的子内容
-   * @param {string} blockId - 块 ID（支持带或不带连字符）
-   * @returns {Promise<Object>} 包含 results 数组的子块列表
+   * Get child blocks of a block
+   * @param {string} blockId - Block ID (with or without hyphens)
+   * @returns {Promise<Object>} Child blocks list with results array
    */
   async getBlockChildren(blockId) {
     const cleanId = blockId.replace(/-/g, '');
@@ -122,11 +122,11 @@ class NotionAPI {
   }
 
   /**
-   * 创建页面
-   * @param {string} parentId - 父页面 ID
-   * @param {string} title - 页面标题
-   * @param {Array} blocks - 子块数组（最多100个）
-   * @returns {Promise<Object>} 创建的页面对象
+   * Create a page
+   * @param {string} parentId - Parent page ID
+   * @param {string} title - Page title
+   * @param {Array} blocks - Child blocks array (max 100)
+   * @returns {Promise<Object>} Created page object
    */
   async createPage(parentId, title, blocks = []) {
     const url = `${this.baseUrl}/pages`;
@@ -144,10 +144,10 @@ class NotionAPI {
   }
 
   /**
-   * 追加块内容
-   * @param {string} blockId - 块 ID
-   * @param {Array} blocks - 要追加的块数组
-   * @returns {Promise<Object>} 追加结果
+   * Append blocks to a page or block
+   * @param {string} blockId - Block ID
+   * @param {Array} blocks - Blocks to append
+   * @returns {Promise<Object>} Append result
    */
   async appendBlocks(blockId, blocks) {
     const cleanId = blockId.replace(/-/g, '');
@@ -158,10 +158,10 @@ class NotionAPI {
   }
 
   /**
-   * 更新块内容
-   * @param {string} blockId - 块 ID
-   * @param {Object} content - 新的块内容
-   * @returns {Promise<Object>} 更新后的块对象
+   * Update a block
+   * @param {string} blockId - Block ID
+   * @param {Object} content - New block content
+   * @returns {Promise<Object>} Updated block object
    */
   async updateBlock(blockId, content) {
     const cleanId = blockId.replace(/-/g, '');
@@ -170,14 +170,53 @@ class NotionAPI {
   }
 
   /**
-   * 删除块
-   * @param {string} blockId - 块 ID
-   * @returns {Promise<Object>} 删除结果
+   * Delete a block
+   * @param {string} blockId - Block ID
+   * @returns {Promise<Object>} Delete result
    */
   async deleteBlock(blockId) {
     const cleanId = blockId.replace(/-/g, '');
     const url = `${this.baseUrl}/blocks/${cleanId}`;
     return await this._request(url, 'DELETE');
+  }
+
+  /**
+   * Find the authorized root page (parent.type === 'workspace').
+   * This is the top-level page bound to the Notion integration.
+   * All new content should be created under this page.
+   * @returns {Promise<Object>} Root page object
+   * @throws {Error} If no root page is found
+   */
+  async findRootPage() {
+    const result = await this.search('', 'page', 100);
+    if (!result.results || result.results.length === 0) {
+      throw new Error('No authorized pages found. Please authorize pages to the integration in Notion first.');
+    }
+
+    const rootPage = result.results.find(p => p.parent && p.parent.type === 'workspace');
+    if (!rootPage) {
+      throw new Error('No root page found (parent.type === workspace). Please check integration authorization.');
+    }
+
+    return rootPage;
+  }
+
+  /**
+   * Create a page with automatic batching for blocks exceeding 100 limit
+   * @param {string} parentId - Parent page ID
+   * @param {string} title - Page title
+   * @param {Array} blocks - Child blocks array (no limit, auto-batched)
+   * @returns {Promise<Object>} Created page object
+   */
+  async createPageSafe(parentId, title, blocks = []) {
+    const page = await this.createPage(parentId, title, blocks.slice(0, 100));
+
+    for (let i = 100; i < blocks.length; i += 100) {
+      const batch = blocks.slice(i, i + 100);
+      await this.appendBlocks(page.id, batch);
+    }
+
+    return page;
   }
 }
 

@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * Notion 内容格式化工具
- * 将 Markdown 文本转换为 Notion 块格式
+ * Notion content formatter
+ * Converts Markdown text to Notion block format
  */
 
 /**
- * 构造富文本对象
- * @param {string} text - 文本内容
- * @param {Object} options - 格式选项
- * @param {boolean} options.bold - 粗体
- * @param {boolean} options.code - 代码
- * @param {boolean} options.italic - 斜体
- * @param {string} options.color - 颜色
- * @param {string} options.url - 链接
- * @returns {Object} 富文本对象
+ * Build a rich text object
+ * @param {string} text - Text content
+ * @param {Object} options - Formatting options
+ * @param {boolean} options.bold - Bold
+ * @param {boolean} options.code - Code
+ * @param {boolean} options.italic - Italic
+ * @param {string} options.color - Color
+ * @param {string} options.url - Link URL
+ * @returns {Object} Rich text object
  */
 function rich(text, options = {}) {
   const { bold, code, italic, color, url } = options;
@@ -37,85 +37,262 @@ function rich(text, options = {}) {
 }
 
 /**
- * 将 Markdown 风格文本转换为 Notion 块列表
+ * Parse inline Markdown formatting into Notion rich_text array
+ * Supports: **bold**, *italic*, `code`, [text](url)
+ * @param {string} text - Markdown line text
+ * @returns {Array} rich_text array
+ */
+function parseInlineFormatting(text) {
+  const richTexts = [];
+  // Match: **bold**, *italic*, `code`, [text](url)
+  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Plain text before match
+    if (match.index > lastIndex) {
+      richTexts.push(rich(text.slice(lastIndex, match.index)));
+    }
+
+    if (match[2]) {
+      richTexts.push(rich(match[2], { bold: true }));
+    } else if (match[4]) {
+      richTexts.push(rich(match[4], { italic: true }));
+    } else if (match[6]) {
+      richTexts.push(rich(match[6], { code: true }));
+    } else if (match[8] && match[9]) {
+      richTexts.push(rich(match[8], { url: match[9] }));
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining plain text
+  if (lastIndex < text.length) {
+    richTexts.push(rich(text.slice(lastIndex)));
+  }
+
+  // Return original text if no matches
+  if (richTexts.length === 0) {
+    richTexts.push(rich(text));
+  }
+
+  return richTexts;
+}
+
+/**
+ * Parse Markdown table lines into a Notion table block
+ * @param {string[]} tableLines - Table lines (header, separator, data rows)
+ * @returns {Object|null} Notion table block or null
+ */
+function parseTable(tableLines) {
+  const rows = [];
+
+  for (const line of tableLines) {
+    const trimmed = line.trim();
+    // Skip separator row |---|---|
+    if (/^\|[\s\-:|]+\|$/.test(trimmed)) continue;
+
+    const cells = trimmed
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(c => c.trim());
+
+    rows.push({
+      type: 'table_row',
+      table_row: {
+        cells: cells.map(cell => [{ type: 'text', text: { content: cell } }])
+      }
+    });
+  }
+
+  if (rows.length === 0) return null;
+
+  const columnCount = rows[0].table_row.cells.length;
+
+  return {
+    object: 'block',
+    type: 'table',
+    table: {
+      table_width: columnCount,
+      has_column_header: true,
+      has_row_header: false,
+      children: rows
+    }
+  };
+}
+
+/**
+ * Map unsupported language names to Notion-supported ones.
+ * Notion only accepts a specific set of language identifiers for code blocks.
+ */
+const LANG_MAP = {
+  'jsx': 'javascript',
+  'tsx': 'typescript',
+  'sh': 'bash',
+  'zsh': 'bash',
+  'yml': 'yaml',
+  'objc': 'objective-c',
+  'cs': 'c#',
+  'cpp': 'c++',
+  'fs': 'f#',
+  'py': 'python',
+  'rb': 'ruby',
+  'rs': 'rust',
+  'kt': 'kotlin',
+  'tf': 'hcl',
+  'dockerfile': 'docker',
+  'text': 'plain text',
+  'txt': 'plain text',
+  '': 'plain text',
+};
+
+/**
+ * Normalize a language identifier to a Notion-supported value.
+ * @param {string} lang - Language from markdown code fence
+ * @returns {string} Notion-supported language
+ */
+function normalizeLang(lang) {
+  const lower = (lang || '').toLowerCase().trim();
+  return LANG_MAP[lower] || lower || 'plain text';
+}
+
+/**
+ * Convert Markdown text to Notion block array
  *
- * 支持的格式：
+ * Supported formats:
  * - # / ## / ###  → heading_1 / heading_2 / heading_3
- * - - 或 *        → bulleted_list_item
+ * - - or *        → bulleted_list_item
  * - 1. 2. 3.     → numbered_list_item
- * - > 引用        → quote
- * - --- 或 ***    → divider
- * - 其他          → paragraph
+ * - > quote       → quote
+ * - --- or ***    → divider
+ * - ```lang```    → code block
+ * - | col | ...   → table
+ * - other         → paragraph
  *
- * @param {string} text - Markdown 文本
- * @returns {Array} Notion 块数组
+ * @param {string} text - Markdown text
+ * @returns {Array} Notion block array
  */
 function textToBlocks(text) {
   const lines = text.trim().split('\n');
   const blocks = [];
+  let i = 0;
 
-  for (const line of lines) {
+  while (i < lines.length) {
+    const line = lines[i];
     const stripped = line.trim();
-    if (!stripped) continue;
 
-    // 分隔线
+    // Skip empty lines
+    if (!stripped) {
+      i++;
+      continue;
+    }
+
+    // Fenced code block ```
+    if (stripped.startsWith('```')) {
+      const lang = normalizeLang(stripped.slice(3));
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // Skip closing ```
+      blocks.push(createCodeBlock(codeLines.join('\n'), lang));
+      continue;
+    }
+
+    // Table (consecutive lines starting with |)
+    if (stripped.startsWith('|')) {
+      const tableLines = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const table = parseTable(tableLines);
+      if (table) blocks.push(table);
+      continue;
+    }
+
+    // Divider
     if (['---', '***', '___'].includes(stripped)) {
       blocks.push(createDivider());
+      i++;
+      continue;
     }
-    // 标题
-    else if (stripped.startsWith('### ')) {
+
+    // Headings
+    if (stripped.startsWith('### ')) {
       blocks.push(createHeading(3, stripped.slice(4)));
+      i++;
+      continue;
     }
-    else if (stripped.startsWith('## ')) {
+    if (stripped.startsWith('## ')) {
       blocks.push(createHeading(2, stripped.slice(3)));
+      i++;
+      continue;
     }
-    else if (stripped.startsWith('# ')) {
+    if (stripped.startsWith('# ')) {
       blocks.push(createHeading(1, stripped.slice(2)));
+      i++;
+      continue;
     }
-    // 引用
-    else if (stripped.startsWith('> ')) {
+
+    // Blockquote
+    if (stripped.startsWith('> ')) {
       blocks.push(createQuote(stripped.slice(2)));
+      i++;
+      continue;
     }
-    // 有序列表
-    else if (/^\d+[.）]/.test(stripped)) {
+
+    // Ordered list: matches "1.", "2.", ... "99." etc.
+    const orderedMatch = stripped.match(/^(\d+)[.)]\s+(.+)/);
+    if (orderedMatch) {
       blocks.push({
         object: 'block',
         type: 'numbered_list_item',
         numbered_list_item: {
-          rich_text: [{ type: 'text', text: { content: stripped.slice(2).trim() } }]
+          rich_text: parseInlineFormatting(orderedMatch[2])
         }
       });
+      i++;
+      continue;
     }
-    // 无序列表
-    else if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
+
+    // Unordered list
+    if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
       blocks.push({
         object: 'block',
         type: 'bulleted_list_item',
         bulleted_list_item: {
-          rich_text: [{ type: 'text', text: { content: stripped.slice(2) } }]
+          rich_text: parseInlineFormatting(stripped.slice(2))
         }
       });
+      i++;
+      continue;
     }
-    // 段落
-    else {
-      blocks.push({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{ type: 'text', text: { content: stripped } }]
-        }
-      });
-    }
+
+    // Paragraph (default)
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: parseInlineFormatting(stripped)
+      }
+    });
+    i++;
   }
 
   return blocks;
 }
 
 /**
- * 创建标题块
- * @param {number} level - 标题级别 (1-3)
- * @param {string} text - 标题文本
- * @returns {Object} 标题块
+ * Create a heading block
+ * @param {number} level - Heading level (1-3)
+ * @param {string} text - Heading text
+ * @returns {Object} Heading block
  */
 function createHeading(level, text) {
   const key = `heading_${level}`;
@@ -129,11 +306,11 @@ function createHeading(level, text) {
 }
 
 /**
- * 创建提示框
- * @param {string} text - 提示文本
- * @param {string} emoji - emoji 图标
- * @param {string} color - 颜色
- * @returns {Object} 提示框块
+ * Create a callout block
+ * @param {string} text - Callout text
+ * @param {string} emoji - Emoji icon
+ * @param {string} color - Color
+ * @returns {Object} Callout block
  */
 function createCallout(text, emoji = '💡', color = 'default') {
   return {
@@ -148,33 +325,45 @@ function createCallout(text, emoji = '💡', color = 'default') {
 }
 
 /**
- * 创建代码块
- * @param {string} code - 代码内容
- * @param {string} language - 编程语言
- * @returns {Object} 代码块
+ * Create a code block
+ * Automatically splits content into multiple rich_text chunks if exceeding 2000 char limit.
+ * @param {string} code - Code content
+ * @param {string} language - Programming language
+ * @returns {Object} Code block
  */
 function createCodeBlock(code, language = 'javascript') {
+  const chunks = [];
+  const MAX_LEN = 2000;
+
+  for (let i = 0; i < code.length; i += MAX_LEN) {
+    chunks.push({ type: 'text', text: { content: code.slice(i, i + MAX_LEN) } });
+  }
+
+  if (chunks.length === 0) {
+    chunks.push({ type: 'text', text: { content: '' } });
+  }
+
   return {
     object: 'block',
     type: 'code',
     code: {
-      rich_text: [{ type: 'text', text: { content: code } }],
+      rich_text: chunks,
       language
     }
   };
 }
 
 /**
- * 创建分隔线
- * @returns {Object} 分隔线块
+ * Create a divider block
+ * @returns {Object} Divider block
  */
 function createDivider() {
   return { object: 'block', type: 'divider', divider: {} };
 }
 
 /**
- * 创建目录
- * @returns {Object} 目录块
+ * Create a table of contents block
+ * @returns {Object} TOC block
  */
 function createToc() {
   return {
@@ -185,10 +374,10 @@ function createToc() {
 }
 
 /**
- * 创建折叠块
- * @param {string} title - 折叠块标题
- * @param {Array} children - 子块数组
- * @returns {Object} 折叠块
+ * Create a toggle block
+ * @param {string} title - Toggle title
+ * @param {Array} children - Child blocks
+ * @returns {Object} Toggle block
  */
 function createToggle(title, children) {
   return {
@@ -202,9 +391,9 @@ function createToggle(title, children) {
 }
 
 /**
- * 创建引用块
- * @param {string} text - 引用文本
- * @returns {Object} 引用块
+ * Create a quote block
+ * @param {string} text - Quote text
+ * @returns {Object} Quote block
  */
 function createQuote(text) {
   return {
@@ -217,10 +406,10 @@ function createQuote(text) {
 }
 
 /**
- * 创建书签
- * @param {string} url - 书签 URL
- * @param {string} caption - 说明文字
- * @returns {Object} 书签块
+ * Create a bookmark block
+ * @param {string} url - Bookmark URL
+ * @param {string} caption - Caption text
+ * @returns {Object} Bookmark block
  */
 function createBookmark(url, caption = '') {
   const block = {
@@ -238,6 +427,8 @@ function createBookmark(url, caption = '') {
 
 module.exports = {
   rich,
+  parseInlineFormatting,
+  parseTable,
   textToBlocks,
   createHeading,
   createCallout,

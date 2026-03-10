@@ -7,31 +7,106 @@ description: Notion integration tool for creating notes, generating docs, organi
 
 Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for efficient Notion workspace management.
 
-## Core Capabilities
+## AI Agent Execution Guide
 
-1. **Write Notes** — Quickly create Notion pages with titles, paragraphs, lists, code blocks, etc.
-2. **Conversation to Document** — Extract and organize conversation content into structured Notion documents
-3. **Organize Pages** — Reorganize page structure and directory hierarchy
-4. **Search** — Search pages and databases in your Notion workspace
-5. **Beautiful Formatting** — Support for headings, lists, callouts, code blocks, dividers, table of contents, and more
+**IMPORTANT: This section defines exactly how AI agents must use this skill. Follow these steps precisely.**
+
+All scripts are located in this skill's `scripts/` directory. Run them with `node` from that directory.
+
+### Create a note (short content)
+
+```bash
+node scripts/create_note.js "title" "markdown content"
+```
+
+- Automatically finds the authorized root page (parent.type === workspace) as parent
+- Automatically batches blocks if content exceeds 100 blocks
+- Content supports full Markdown: headings, lists, code blocks, tables, bold, italic, links
+
+### Create a note from Markdown file (long content)
+
+```bash
+node scripts/create_note_from_file.js "title" "/absolute/path/to/file.md"
+```
+
+- For long documents: first write content to a temp .md file, then use this script
+- Same auto-batching and root page detection as create_note.js
+
+### Search pages
+
+```bash
+node scripts/search.js "keyword"
+```
+
+- Returns page title, ID, parent type, and URL
+
+### Append content to existing page
+
+```bash
+node scripts/append.js "page-id-or-title" "markdown content"
+```
+
+- Accepts page ID (UUID) or page title (searched automatically)
+- Auto-batches if content exceeds 100 blocks
+
+### Workflow for creating documents
+
+1. Compose the full Markdown content
+2. Write it to a temp file (e.g., `/tmp/doc.md`)
+3. Run: `node scripts/create_note_from_file.js "Document Title" "/tmp/doc.md"`
+4. Clean up the temp file
+
+### Key rules for AI agents
+
+- **NEVER write custom scripts** — use the provided scripts above
+- **NEVER pick a random page as parent** — scripts use `findRootPage()` to locate the correct authorized root page automatically
+- **Long content** — use `create_note_from_file.js` with a temp .md file, not inline arguments
+- **All scripts output `OK` on success** — check for this in the output
+
+## API Reference (for advanced/custom usage only)
+
+```javascript
+const NotionAPI = require('./scripts/notion_api');
+const { textToBlocks } = require('./scripts/formatter');
+
+const api = new NotionAPI();
+
+// Find authorized root page (ALWAYS use this, never search('')[0])
+const root = await api.findRootPage();
+
+// Create page with auto-batching (handles >100 blocks)
+const page = await api.createPageSafe(root.id, 'Title', blocks);
+
+// Search
+const result = await api.search('keyword', 'page', 20);
+
+// Append content (batch manually for >100 blocks)
+await api.appendBlocks(pageId, blocks);
+
+// Other: getBlockChildren, updateBlock, deleteBlock
+```
+
+## Formatter Reference
+
+`scripts/formatter.js` converts Markdown to Notion blocks:
+
+| Function | Purpose |
+|----------|---------|
+| `textToBlocks(md)` | Full Markdown → Notion blocks (headings, lists, code blocks, tables, quotes, dividers) |
+| `createCallout(text, emoji)` | Callout box |
+| `createCodeBlock(code, lang)` | Code block with syntax highlighting |
+| `createDivider()` | Horizontal divider |
+| `createToc()` | Table of contents |
+| `createToggle(title, children)` | Collapsible toggle block |
+| `rich(text, {bold, italic, code, url})` | Rich text constructor |
 
 ## Prerequisites
 
-Complete these two configuration steps before use:
-
 ### Step 1: Get Notion API Key
 
-1. Log in to Notion and visit https://www.notion.so/my-integrations
-2. Find the **"Internal integrations"** button at the bottom of the left sidebar
-3. Click **"+ New integration"** in the top right
-4. Fill in the integration name (e.g., `agent` or `notion-helper`)
-5. Select the associated workspace
-6. In the **"Capabilities"** section, check the following permissions:
-   - ✅ **Read content**
-   - ✅ **Update content**
-   - ✅ **Insert content**
-7. Click **"Submit"** to create the integration
-8. Copy the generated **Internal Integration Secret** (starts with `ntn_`), this is your API Key
+1. Visit https://www.notion.so/my-integrations
+2. Create a new internal integration with Read/Update/Insert permissions
+3. Copy the Internal Integration Secret (starts with `ntn_`)
 
 ### Step 2: Set Environment Variable
 
@@ -48,119 +123,6 @@ source ~/.bashrc
 
 ### Step 3: Authorize Page Access
 
-On the Notion page you want to access:
-1. Click the `···` menu in the top right
-2. Select **"Add connections"**
-3. Search for and select your integration name
-4. Confirm authorization
+On the Notion page: click `···` → **Add connections** → select your integration → confirm.
 
 > Only authorized pages (and their sub-pages) can be accessed by the API.
-
-## Usage Guide
-
-### Connect to Notion
-
-Before each operation, use the API client in `scripts/notion_api.js` to connect to Notion. The script will:
-- Automatically read the API Key from environment variables
-- Use Node.js built-in https module, no dependencies required
-- Automatic retry and chunked reading for better network stability
-
-```javascript
-// Usage example (in script)
-const NotionAPI = require('./scripts/notion_api');
-const { textToBlocks } = require('./scripts/formatter');
-
-const api = new NotionAPI();
-```
-
-### 1. Search Pages
-
-```
-Search for pages containing "project" in Notion
-```
-
-Execution: Call `api.search("project")`
-
-### 2. Create Note
-
-```
-Create a note in Notion with title "Meeting Notes" and content about project progress
-```
-
-Execution flow:
-1. Use `api.search("")` to find available parent pages
-2. Use `textToBlocks()` from `scripts/formatter.js` to convert content to Notion blocks
-3. Use `api.createPage(parentId, title, blocks)` to create the page
-
-### 3. Conversation to Document
-
-```
-Organize our discussion into a Notion document
-```
-
-Execution flow:
-1. Extract key content from conversation history
-2. Organize into structured format (headings + paragraphs + lists)
-3. Convert to Notion blocks using formatter and create page
-
-### 4. Organize Page Structure
-
-```
-Organize the sub-pages of "Work Notes" in Notion
-```
-
-Execution flow:
-1. Use `api.search("Work Notes")` to find target page
-2. Use `api.getBlockChildren(pageId)` to get child content
-3. Reorganize as needed (delete, append, update blocks)
-
-### 5. Modify Existing Page
-
-```
-Add a paragraph to that page
-```
-
-Execution flow:
-1. Use `api.appendBlocks(pageId, newBlocks)` to append content
-2. Or use `api.updateBlock(blockId, newContent)` to modify specific block
-3. Or use `api.deleteBlock(blockId)` to delete specific block
-
-## Formatting Reference
-
-`scripts/formatter.js` provides the following conversion functions:
-
-| Function | Purpose | Example |
-|----------|---------|---------|
-| `textToBlocks(text)` | Markdown text → Notion blocks | Auto-detect `#` headings, `-` lists, paragraphs |
-| `createCallout(text, emoji)` | Create callout box | 💡 Highlight information |
-| `createCodeBlock(code, lang)` | Create code block | Syntax highlighting support |
-| `createDivider()` | Create divider | — |
-| `createToc()` | Create table of contents | Auto-generate page TOC |
-| `createToggle(title, children)` | Create toggle block | Expandable/collapsible content |
-| `rich(text, options)` | Rich text constructor | Bold, code, color |
-
-### Manual Block Construction
-
-When formatter is insufficient, you can directly construct Notion API block format:
-
-```javascript
-// Formatted paragraph
-const block = {
-  object: 'block',
-  type: 'paragraph',
-  paragraph: {
-    rich_text: [
-      { type: 'text', text: { content: 'Normal text' } },
-      { type: 'text', text: { content: 'Bold' }, annotations: { bold: true } },
-      { type: 'text', text: { content: 'Code' }, annotations: { code: true } }
-    ]
-  }
-};
-```
-
-## Important Notes
-
-- All API calls are executed through `scripts/notion_api.js`, no third-party packages required
-- Notion API limit: Maximum 100 child blocks per page creation, use `appendBlocks` for more
-- Pages must be authorized to the integration first, otherwise search results will be empty
-- Network requests include automatic retry mechanism with exponential backoff
