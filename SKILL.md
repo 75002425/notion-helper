@@ -21,11 +21,17 @@ description: Notion 集成工具，支持写笔记、生成文档、整理页面
 
 ### 第 1 步：获取 Notion API Key
 
-1. 访问 https://www.notion.so/my-integrations
-2. 点击 **"+ New integration"**
-3. 填写名称（如 `agent`），选择工作区
-4. 勾选权限：**Read content, Update content, Insert content**
-5. 复制生成的 API key（以 `ntn_` 开头）
+1. 登录 Notion，访问 https://www.notion.so/my-integrations
+2. 在左侧边栏最下方找到 **"内部集成"** 按钮，点击进入
+3. 点击右上角 **"+ New integration"**（新建集成）
+4. 填写集成名称（如 `agent` 或 `notion-helper`）
+5. 选择关联的工作区（Workspace）
+6. 在 **"内容功能"** 部分，勾选以下权限：
+   - ✅ **Read content**（读取内容）
+   - ✅ **Update content**（更新内容）
+   - ✅ **Insert content**（插入内容）
+7. 点击 **"提交"** 创建集成
+8. 复制生成的 **Internal Integration Secret**（以 `ntn_` 开头），这就是你的 API Key
 
 ### 第 2 步：设置环境变量
 
