@@ -1,70 +1,72 @@
 # notion-helper
 
-安全的 Notion 集成工具，零外部依赖（纯 Python 标准库），帮你在任何 AI 代理中管理 Notion 工作区。
+Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for managing Notion workspace in any AI agent.
 
-## 功能
+[中文文档](./README_CN.md)
 
-- 📝 **写笔记** — 快速创建 Notion 页面
-- 📄 **对话转文档** — 将对话内容整理为结构化 Notion 文档
-- 🗂️ **整理页面** — 重新组织页面结构和目录层级
-- 🔍 **搜索** — 搜索工作区中的页面和数据库
-- ✏️ **修改页面** — 追加、更新、删除已有页面内容
-- 🎨 **美观排版** — 标题、列表、callout、代码块、折叠块等丰富格式
+## Features
 
-## 安装
+- 📝 **Write Notes** — Quickly create Notion pages
+- 📄 **Conversation to Document** — Organize conversations into structured Notion documents
+- 🗂️ **Organize Pages** — Reorganize page structure and directory hierarchy
+- 🔍 **Search** — Search pages and databases in workspace
+- ✏️ **Modify Pages** — Append, update, delete existing page content
+- 🎨 **Beautiful Formatting** — Rich formats including headings, lists, callouts, code blocks, toggles, etc.
+
+## Installation
 
 ```bash
-npx skills add <your-github-username>/notion-helper -g --agent '*' -y
+npx skills add 75002425/notion-helper -g --agent '*' -y
 ```
 
-- `-g` 全局安装（用户级）
-- `--agent '*'` 关联到所有 AI 代理
+- `-g` Global installation (user-level)
+- `--agent '*'` Associate with all AI agents
 
-## 配置
+## Configuration
 
-### 1. 获取 Notion API Key
+### 1. Get Notion API Key
 
-1. 登录 Notion，访问 https://www.notion.so/my-integrations
-2. 在左侧边栏最下方找到 **"内部集成"** 按钮，点击进入
-3. 点击右上角 **"+ New integration"**（新建集成）
-4. 填写集成名称（如 `agent` 或 `notion-helper`）
-5. 选择关联的工作区
-6. 在 **"内容功能"** 部分，勾选权限：
-   - ✅ Read content（读取内容）
-   - ✅ Update content（更新内容）
-   - ✅ Insert content（插入内容）
-7. 点击 **"提交"**，复制生成的 **Internal Integration Secret**（以 `ntn_` 开头）
+1. Log in to Notion and visit https://www.notion.so/my-integrations
+2. Find the **"Internal integrations"** button at the bottom of the left sidebar
+3. Click **"+ New integration"** in the top right
+4. Fill in the integration name (e.g., `agent` or `notion-helper`)
+5. Select the associated workspace
+6. In the **"Capabilities"** section, check permissions:
+   - ✅ Read content
+   - ✅ Update content
+   - ✅ Insert content
+7. Click **"Submit"** and copy the generated **Internal Integration Secret** (starts with `ntn_`)
 
-### 2. 设置环境变量
+### 2. Set Environment Variable
 
 **Windows (PowerShell):**
 ```powershell
-[System.Environment]::SetEnvironmentVariable('NOTION_API_KEY', '你的API_KEY', 'User')
+[System.Environment]::SetEnvironmentVariable('NOTION_API_KEY', 'your_api_key', 'User')
 ```
 
 **Linux / Mac:**
 ```bash
-echo 'export NOTION_API_KEY="你的API_KEY"' >> ~/.bashrc && source ~/.bashrc
+echo 'export NOTION_API_KEY="your_api_key"' >> ~/.bashrc && source ~/.bashrc
 ```
 
-### 3. 授权页面
+### 3. Authorize Pages
 
-在需要访问的 Notion 页面上：点击 `···` → **Add connections** → 选择你的 integration → 确认
+On the Notion page you want to access: Click `···` → **Add connections** → Select your integration → Confirm
 
-## 使用示例
+## Usage Examples
 
 ```
-帮我在 Notion 创建一个笔记，标题是"会议记录"
-搜索 Notion 中包含"项目"的页面
-把我们刚才的讨论整理成 Notion 文档
+Create a note in Notion with title "Meeting Notes"
+Search for pages containing "project" in Notion
+Organize our discussion into a Notion document
 ```
 
-## 技术特点
+## Technical Features
 
-- **零依赖** — 纯 Python 标准库（urllib），无需 pip install
-- **自动代理** — Windows 自动检测系统代理，Linux/Mac 读取环境变量
-- **跨平台** — Windows / Linux / Mac 全支持
-- **多代理** — 安装后所有 AI 代理（Claude Code、Cursor、Qwen Code 等）均可使用
+- **Zero Dependencies** — Pure Node.js built-in modules (https), no npm install required
+- **Auto Retry** — Network requests with automatic retry and exponential backoff
+- **Cross-platform** — Windows / Linux / Mac fully supported
+- **Multi-agent** — Works with all AI agents (Claude Code, Cursor, Qwen Code, etc.) after installation
 
 ## License
 

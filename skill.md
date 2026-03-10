@@ -5,166 +5,162 @@ description: Notion integration tool for creating notes, generating docs, organi
 
 # Notion Helper
 
-安全的 Notion 集成工具，零外部依赖（纯 Python 标准库），帮你高效管理 Notion 工作区。
+Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for efficient Notion workspace management.
 
-## 核心能力
+## Core Capabilities
 
-1. **写笔记** — 快速创建 Notion 页面，支持标题、段落、列表、代码块等
-2. **对话转文档** — 将当前对话内容提取整理为结构化 Notion 文档
-3. **整理页面** — 重新组织页面结构和目录层级
-4. **搜索** — 搜索 Notion 工作区中的页面和数据库
-5. **美观排版** — 支持标题、列表、callout、代码块、分隔线、目录等丰富格式
+1. **Write Notes** — Quickly create Notion pages with titles, paragraphs, lists, code blocks, etc.
+2. **Conversation to Document** — Extract and organize conversation content into structured Notion documents
+3. **Organize Pages** — Reorganize page structure and directory hierarchy
+4. **Search** — Search pages and databases in your Notion workspace
+5. **Beautiful Formatting** — Support for headings, lists, callouts, code blocks, dividers, table of contents, and more
 
-## 前置配置
+## Prerequisites
 
-使用前必须完成两步配置：
+Complete these two configuration steps before use:
 
-### 第 1 步：获取 Notion API Key
+### Step 1: Get Notion API Key
 
-1. 登录 Notion，访问 https://www.notion.so/my-integrations
-2. 在左侧边栏最下方找到 **"内部集成"** 按钮，点击进入
-3. 点击右上角 **"+ New integration"**（新建集成）
-4. 填写集成名称（如 `agent` 或 `notion-helper`）
-5. 选择关联的工作区（Workspace）
-6. 在 **"内容功能"** 部分，勾选以下权限：
-   - ✅ **Read content**（读取内容）
-   - ✅ **Update content**（更新内容）
-   - ✅ **Insert content**（插入内容）
-7. 点击 **"提交"** 创建集成
-8. 复制生成的 **Internal Integration Secret**（以 `ntn_` 开头），这就是你的 API Key
+1. Log in to Notion and visit https://www.notion.so/my-integrations
+2. Find the **"Internal integrations"** button at the bottom of the left sidebar
+3. Click **"+ New integration"** in the top right
+4. Fill in the integration name (e.g., `agent` or `notion-helper`)
+5. Select the associated workspace
+6. In the **"Capabilities"** section, check the following permissions:
+   - ✅ **Read content**
+   - ✅ **Update content**
+   - ✅ **Insert content**
+7. Click **"Submit"** to create the integration
+8. Copy the generated **Internal Integration Secret** (starts with `ntn_`), this is your API Key
 
-### 第 2 步：设置环境变量
+### Step 2: Set Environment Variable
 
 **Windows (PowerShell):**
 ```powershell
-[System.Environment]::SetEnvironmentVariable('NOTION_API_KEY', '你的API_KEY', 'User')
+[System.Environment]::SetEnvironmentVariable('NOTION_API_KEY', 'your_api_key', 'User')
 ```
 
 **Linux / Mac:**
 ```bash
-echo 'export NOTION_API_KEY="你的API_KEY"' >> ~/.bashrc
+echo 'export NOTION_API_KEY="your_api_key"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 第 3 步：授权页面访问
+### Step 3: Authorize Page Access
 
-在需要访问的 Notion 页面上：
-1. 点击右上角 `···` 菜单
-2. 选择 **"Add connections"**（添加关联）
-3. 搜索并选择你创建的 integration 名称
-4. 确认授权
+On the Notion page you want to access:
+1. Click the `···` menu in the top right
+2. Select **"Add connections"**
+3. Search for and select your integration name
+4. Confirm authorization
 
-> 只有被授权的页面（及其子页面）才能被 API 访问。
+> Only authorized pages (and their sub-pages) can be accessed by the API.
 
-## 使用指南
+## Usage Guide
 
-### 连接 Notion
+### Connect to Notion
 
-每次操作前，先运行 `scripts/notion_api.py` 中的 API 客户端连接 Notion。脚本会：
-- 自动读取环境变量中的 API Key
-- 自动检测系统代理设置（Windows 注册表）
-- 无需手动配置代理
+Before each operation, use the API client in `scripts/notion_api.js` to connect to Notion. The script will:
+- Automatically read the API Key from environment variables
+- Use Node.js built-in https module, no dependencies required
+- Automatic retry and chunked reading for better network stability
 
-```python
-# 用法示例（在脚本中）
-import subprocess, sys, os
+```javascript
+// Usage example (in script)
+const NotionAPI = require('./scripts/notion_api');
+const { textToBlocks } = require('./scripts/formatter');
 
-skill_dir = os.path.dirname(os.path.abspath(__file__))
-# 或者直接 import
-sys.path.insert(0, skill_dir)
-from scripts.notion_api import NotionAPI
-
-api = NotionAPI()
+const api = new NotionAPI();
 ```
 
-### 1. 搜索页面
+### 1. Search Pages
 
 ```
-帮我搜索 Notion 中包含"项目"关键词的页面
+Search for pages containing "project" in Notion
 ```
 
-执行方式：调用 `api.search("项目")`
+Execution: Call `api.search("project")`
 
-### 2. 创建笔记
-
-```
-帮我在 Notion 创建一个笔记，标题是"会议记录"，内容是今天讨论了项目进度
-```
-
-执行流程：
-1. 用 `api.search("")` 找到可用的父页面
-2. 用 `scripts/formatter.py` 中的 `text_to_blocks()` 将内容转为 Notion 块
-3. 用 `api.create_page(parent_id, title, blocks)` 创建页面
-
-### 3. 对话转文档
+### 2. Create Note
 
 ```
-把我们刚才讨论的内容整理成 Notion 文档
+Create a note in Notion with title "Meeting Notes" and content about project progress
 ```
 
-执行流程：
-1. 从对话历史中提取关键内容
-2. 组织为结构化格式（标题 + 段落 + 列表）
-3. 用 formatter 转为 Notion 块后创建页面
+Execution flow:
+1. Use `api.search("")` to find available parent pages
+2. Use `textToBlocks()` from `scripts/formatter.js` to convert content to Notion blocks
+3. Use `api.createPage(parentId, title, blocks)` to create the page
 
-### 4. 整理页面结构
-
-```
-帮我整理 Notion 中"工作笔记"页面的子页面
-```
-
-执行流程：
-1. 用 `api.search("工作笔记")` 找到目标页面
-2. 用 `api.get_block_children(page_id)` 获取子内容
-3. 按需重新组织（删除、追加、更新块）
-
-### 5. 修改已有页面
+### 3. Conversation to Document
 
 ```
-帮我在那个页面后面加一段内容
+Organize our discussion into a Notion document
 ```
 
-执行流程：
-1. 用 `api.append_blocks(page_id, new_blocks)` 追加内容
-2. 或用 `api.update_block(block_id, new_content)` 修改指定块
-3. 或用 `api.delete_block(block_id)` 删除指定块
+Execution flow:
+1. Extract key content from conversation history
+2. Organize into structured format (headings + paragraphs + lists)
+3. Convert to Notion blocks using formatter and create page
 
-## 格式化参考
+### 4. Organize Page Structure
 
-`scripts/formatter.py` 提供以下格式转换函数：
-
-| 函数 | 用途 | 示例 |
-|------|------|------|
-| `text_to_blocks(text)` | Markdown 文本 → Notion 块 | 自动识别 `#` 标题、`-` 列表、段落 |
-| `create_callout(text, emoji)` | 创建提示框 | 💡 高亮提示信息 |
-| `create_code_block(code, lang)` | 创建代码块 | 支持语法高亮 |
-| `create_divider()` | 创建分隔线 | — |
-| `create_toc()` | 创建目录 | 自动生成页面目录 |
-| `create_toggle(title, children)` | 创建折叠块 | 可展开/收起的内容 |
-| `rich(text, bold, code, color)` | 富文本构造器 | 粗体、代码、颜色 |
-
-### 手动构造 Notion 块
-
-当 formatter 不够用时，可以直接构造 Notion API 的块格式：
-
-```python
-# 带格式的段落
-block = {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-        "rich_text": [
-            {"type": "text", "text": {"content": "普通文本"}},
-            {"type": "text", "text": {"content": "粗体"}, "annotations": {"bold": True}},
-            {"type": "text", "text": {"content": "代码"}, "annotations": {"code": True}},
-        ]
-    }
-}
+```
+Organize the sub-pages of "Work Notes" in Notion
 ```
 
-## 代理使用须知
+Execution flow:
+1. Use `api.search("Work Notes")` to find target page
+2. Use `api.getBlockChildren(pageId)` to get child content
+3. Reorganize as needed (delete, append, update blocks)
 
-- 所有 API 调用通过 `scripts/notion_api.py` 执行，无需安装任何第三方包
-- 脚本会自动处理代理（proxy）设置，Windows 用户无需额外配置
-- Notion API 限制：每次创建页面最多 100 个子块，超过需分批 `append_blocks`
-- 页面必须先被授权给 integration，否则搜索结果为空
+### 5. Modify Existing Page
+
+```
+Add a paragraph to that page
+```
+
+Execution flow:
+1. Use `api.appendBlocks(pageId, newBlocks)` to append content
+2. Or use `api.updateBlock(blockId, newContent)` to modify specific block
+3. Or use `api.deleteBlock(blockId)` to delete specific block
+
+## Formatting Reference
+
+`scripts/formatter.js` provides the following conversion functions:
+
+| Function | Purpose | Example |
+|----------|---------|---------|
+| `textToBlocks(text)` | Markdown text → Notion blocks | Auto-detect `#` headings, `-` lists, paragraphs |
+| `createCallout(text, emoji)` | Create callout box | 💡 Highlight information |
+| `createCodeBlock(code, lang)` | Create code block | Syntax highlighting support |
+| `createDivider()` | Create divider | — |
+| `createToc()` | Create table of contents | Auto-generate page TOC |
+| `createToggle(title, children)` | Create toggle block | Expandable/collapsible content |
+| `rich(text, options)` | Rich text constructor | Bold, code, color |
+
+### Manual Block Construction
+
+When formatter is insufficient, you can directly construct Notion API block format:
+
+```javascript
+// Formatted paragraph
+const block = {
+  object: 'block',
+  type: 'paragraph',
+  paragraph: {
+    rich_text: [
+      { type: 'text', text: { content: 'Normal text' } },
+      { type: 'text', text: { content: 'Bold' }, annotations: { bold: true } },
+      { type: 'text', text: { content: 'Code' }, annotations: { code: true } }
+    ]
+  }
+};
+```
+
+## Important Notes
+
+- All API calls are executed through `scripts/notion_api.js`, no third-party packages required
+- Notion API limit: Maximum 100 child blocks per page creation, use `appendBlocks` for more
+- Pages must be authorized to the integration first, otherwise search results will be empty
+- Network requests include automatic retry mechanism with exponential backoff
