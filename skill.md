@@ -1,6 +1,6 @@
 ---
 name: notion-helper
-description: Notion 集成工具，支持写笔记、生成文档、整理页面结构、搜索页面。当用户提到 Notion、笔记同步、写入 Notion、整理 Notion 文档、notion 页面等关键词时使用此技能。即使用户只是说"帮我记个笔记到 Notion"或"把这段对话整理成文档存到 Notion"也应触发。
+description: Notion integration tool for creating notes, generating docs, organizing pages, and searching. Triggers when user mentions Notion, note sync, writing to Notion, organizing Notion docs, or Notion pages. Also triggers for casual requests like "take a note in Notion" or "save this conversation to Notion".
 ---
 
 # Notion Helper
