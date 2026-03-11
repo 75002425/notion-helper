@@ -1,6 +1,6 @@
 ---
 name: notion-helper
-description: Notion integration tool for creating notes, generating docs, organizing pages, and searching. Triggers when user mentions Notion, note sync, writing to Notion, organizing Notion docs, or Notion pages. Also triggers for casual requests like "take a note in Notion" or "save this conversation to Notion".
+description: Use when user wants to create a Notion note or document, including under planned nested page paths, search Notion pages, or append content to an existing Notion page.
 ---
 
 # Notion Helper
@@ -23,26 +23,69 @@ Re-run the same command to upgrade `notion-helper`. `skills` will detect the exi
 
 All scripts are located in this skill's `scripts/` directory. Run them with `node` from that directory.
 
-### Create a note (short content)
+### Default execution policy
+
+1. For normal Notion work, use the provided scripts directly.
+2. Do not write new JS, TS, Python, or shell scripts if one of the provided scripts already covers the task.
+3. For long content, first write Markdown to a temp `.md` file, then call `create_note_from_file.js`.
+4. If the request includes a desired location such as a category, folder, section, or multi-level path, use the path-aware scripts instead of creating directly under the root page.
+5. When appending to an existing page, prefer page ID. If the page may be ambiguous, run `search.js` first and then use the returned ID.
+6. If the request is outside the current script set, state that the standard `notion-helper` skill does not support it yet. Do not improvise with new code unless the user explicitly asks to extend or debug this skill itself.
+
+### Supported scripts
+
+#### Create a note (short content)
 
 ```bash
 node scripts/create_note.js "title" "markdown content"
 ```
 
+- Use for short notes or small one-shot content
 - Automatically finds the authorized root page (parent.type === workspace) as parent
 - Automatically batches blocks if content exceeds 100 blocks
-- Content supports full Markdown: headings, lists, code blocks, tables, bold, italic, links
+- Content supports Markdown headings, lists, code blocks, tables, bold, italic, and links
 
-### Create a note from Markdown file (long content)
+#### Create a note from Markdown file (long content)
 
 ```bash
 node scripts/create_note_from_file.js "title" "/absolute/path/to/file.md"
 ```
 
-- For long documents: first write content to a temp .md file, then use this script
+- This is the default path for generated documents, reports, summaries, or long structured content
+- First write content to a temp `.md` file, then use this script
 - Same auto-batching and root page detection as create_note.js
 
-### Search pages
+#### Ensure a nested page path
+
+```bash
+node scripts/ensure_path.js "Research/Strategy/Reviews"
+```
+
+- Creates missing child pages under the authorized root page
+- Reuses existing child pages by exact title match
+- Use this when the user asks for a directory, section, category, or multi-level page structure
+
+#### Create a note in a nested page path
+
+```bash
+node scripts/create_note_in_path.js "Research/Strategy" "title" "markdown content"
+```
+
+- Ensures the target page path exists first
+- Then creates the new page under the final path page
+- Use this for short content that belongs in a specific subpage path
+
+#### Create a note from Markdown file in a nested page path
+
+```bash
+node scripts/create_note_from_file_in_path.js "Research/Strategy" "title" "/absolute/path/to/file.md"
+```
+
+- This is the default path-aware flow for generated documents
+- Ensures the full nested path exists before creating the document
+- Use this when the user specifies both document content and a target directory path
+
+#### Search pages
 
 ```bash
 node scripts/search.js "keyword"
@@ -50,65 +93,49 @@ node scripts/search.js "keyword"
 
 - Returns page title, ID, parent type, and URL
 
-### Append content to existing page
+#### Append content to existing page
 
 ```bash
 node scripts/append.js "page-id-or-title" "markdown content"
 ```
 
 - Accepts page ID (UUID) or page title (searched automatically)
+- Prefer page ID when accuracy matters
 - Auto-batches if content exceeds 100 blocks
 
-### Workflow for creating documents
+### Standard workflows
 
-1. Compose the full Markdown content
-2. Write it to a temp file (e.g., `/tmp/doc.md`)
-3. Run: `node scripts/create_note_from_file.js "Document Title" "/tmp/doc.md"`
-4. Clean up the temp file
+#### Create a long document
 
-### Key rules for AI agents
+1. Compose the full Markdown content.
+2. Write it to a temp file such as `/tmp/doc.md`.
+3. Run `node scripts/create_note_from_file.js "Document Title" "/tmp/doc.md"`.
+4. Clean up the temp file.
 
-- **NEVER write custom scripts** — use the provided scripts above
-- **NEVER pick a random page as parent** — scripts use `findRootPage()` to locate the correct authorized root page automatically
-- **Long content** — use `create_note_from_file.js` with a temp .md file, not inline arguments
-- **All scripts output `OK` on success** — check for this in the output
+#### Create a long document in a nested path
 
-## API Reference (for advanced/custom usage only)
+1. Compose the full Markdown content.
+2. Write it to a temp file such as `/tmp/doc.md`.
+3. If needed, ensure the target path with `node scripts/ensure_path.js "Research/Strategy"`.
+4. Run `node scripts/create_note_from_file_in_path.js "Research/Strategy" "Document Title" "/tmp/doc.md"`.
+5. Clean up the temp file.
 
-```javascript
-const NotionAPI = require('./scripts/notion_api');
-const { textToBlocks } = require('./scripts/formatter');
+#### Append to an existing page safely
 
-const api = new NotionAPI();
+1. If the exact page ID is already known, use it directly.
+2. Otherwise run `node scripts/search.js "keyword"` first.
+3. Use the returned page ID with `append.js` if multiple pages could match the same title.
 
-// Find authorized root page (ALWAYS use this, never search('')[0])
-const root = await api.findRootPage();
+### Hard rules for AI agents
 
-// Create page with auto-batching (handles >100 blocks)
-const page = await api.createPageSafe(root.id, 'Title', blocks);
-
-// Search
-const result = await api.search('keyword', 'page', 20);
-
-// Append content (batch manually for >100 blocks)
-await api.appendBlocks(pageId, blocks);
-
-// Other: getBlockChildren, updateBlock, deleteBlock
-```
-
-## Formatter Reference
-
-`scripts/formatter.js` converts Markdown to Notion blocks:
-
-| Function | Purpose |
-|----------|---------|
-| `textToBlocks(md)` | Full Markdown → Notion blocks (headings, lists, code blocks, tables, quotes, dividers) |
-| `createCallout(text, emoji)` | Callout box |
-| `createCodeBlock(code, lang)` | Code block with syntax highlighting |
-| `createDivider()` | Horizontal divider |
-| `createToc()` | Table of contents |
-| `createToggle(title, children)` | Collapsible toggle block |
-| `rich(text, {bold, italic, code, url})` | Rich text constructor |
+- **NEVER write custom scripts for normal create/search/append tasks**.
+- **NEVER call `notion_api.js` directly for ordinary use**.
+- **NEVER pick a random page as parent**. Use the provided create scripts so `findRootPage()` decides correctly.
+- **When location matters, NEVER fall back to root-page creation**. Use the path-aware scripts.
+- **NEVER pass a long document inline**. Use `create_note_from_file.js` with a temp Markdown file.
+- **NEVER guess when a page title may be ambiguous**. Search first and prefer page ID.
+- **If the request is unsupported, say so clearly instead of generating new Notion code**.
+- **All provided scripts output `OK` on success**. Check for that in the command output.
 
 ## Prerequisites
 

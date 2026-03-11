@@ -8,9 +8,9 @@ Secure Notion integration tool with zero external dependencies (pure Node.js bui
 
 - 📝 **Write Notes** — Quickly create Notion pages
 - 📄 **Conversation to Document** — Organize conversations into structured Notion documents
-- 🗂️ **Organize Pages** — Reorganize page structure and directory hierarchy
+- 📂 **Path Planning** — Create nested child page paths under the authorized root page
 - 🔍 **Search** — Search pages and databases in workspace
-- ✏️ **Modify Pages** — Append, update, delete existing page content
+- ✏️ **Append Content** — Add Markdown content to an existing page
 - 🎨 **Beautiful Formatting** — Rich formats including headings, lists, callouts, code blocks, toggles, etc.
 
 ## Installation
@@ -70,7 +70,17 @@ On the Notion page you want to access: Click `···` → **Add connections** �
 Create a note in Notion with title "Meeting Notes"
 Search for pages containing "project" in Notion
 Organize our discussion into a Notion document
+Put the review doc under the Notion path "Research/Strategy/Moving Average"
 ```
+
+## Standard Usage
+
+- For normal Notion tasks, agents should call the provided scripts directly instead of writing new JS code
+- Long documents should be written to a temporary Markdown file and then created with `node scripts/create_note_from_file.js "Title" "/absolute/path/to/file.md"`
+- If the user specifies a category, section, folder-like structure, or nested path, use the path-aware scripts such as `node scripts/create_note_from_file_in_path.js "Research/Strategy/Moving Average" "Review" "/absolute/path/to/file.md"`
+- To pre-create or normalize a nested path, run `node scripts/ensure_path.js "Research/Strategy/Moving Average"`
+- When appending to an existing page, prefer page ID; if the title may be ambiguous, run `node scripts/search.js "keyword"` first
+- The current standard script set covers path planning, create, search, and append. If a request falls outside those operations, agents should not improvise by generating new Notion scripts
 
 ## Technical Features
 

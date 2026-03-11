@@ -115,10 +115,60 @@ class NotionAPI {
    * @param {string} blockId - Block ID (with or without hyphens)
    * @returns {Promise<Object>} Child blocks list with results array
    */
-  async getBlockChildren(blockId) {
+  async getBlockChildren(blockId, startCursor = null) {
     const cleanId = blockId.replace(/-/g, '');
-    const url = `${this.baseUrl}/blocks/${cleanId}/children?page_size=100`;
+    const cursorQuery = startCursor ? `&start_cursor=${encodeURIComponent(startCursor)}` : '';
+    const url = `${this.baseUrl}/blocks/${cleanId}/children?page_size=100${cursorQuery}`;
     return await this._request(url, 'GET');
+  }
+
+  /**
+   * List direct child pages under a parent page.
+   * @param {string} parentId - Parent page ID
+   * @returns {Promise<Array>} Child page descriptors
+   */
+  async listChildPages(parentId) {
+    const childPages = [];
+    let cursor = null;
+
+    do {
+      const result = await this.getBlockChildren(parentId, cursor);
+      const blocks = result.results || [];
+
+      for (const block of blocks) {
+        if (block.type === 'child_page' && block.child_page) {
+          childPages.push({
+            id: block.id,
+            title: block.child_page.title || '',
+            url: block.url,
+            parent: {
+              type: 'page_id',
+              page_id: parentId.replace(/-/g, ''),
+            },
+          });
+        }
+      }
+
+      cursor = result.has_more ? result.next_cursor : null;
+    } while (cursor);
+
+    return childPages;
+  }
+
+  /**
+   * Find a direct child page by exact title match under a parent page.
+   * @param {string} parentId - Parent page ID
+   * @param {string} title - Child page title
+   * @returns {Promise<Object|null>} Matching child page or null
+   */
+  async findChildPageByTitle(parentId, title) {
+    const expectedTitle = String(title || '').trim();
+    if (!expectedTitle) {
+      throw new Error('Child page title must not be empty.');
+    }
+
+    const childPages = await this.listChildPages(parentId);
+    return childPages.find(page => page.title.trim() === expectedTitle) || null;
   }
 
   /**

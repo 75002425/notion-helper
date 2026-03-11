@@ -8,9 +8,9 @@
 
 - 📝 **写笔记** — 快速创建 Notion 页面
 - 📄 **对话转文档** — 将对话内容整理为结构化 Notion 文档
-- 🗂️ **整理页面** — 重新组织页面结构和目录层级
+- 📂 **目录规划** — 在已授权根页下按路径创建多级子页面
 - 🔍 **搜索** — 搜索工作区中的页面和数据库
-- ✏️ **修改页面** — 追加、更新、删除已有页面内容
+- ✏️ **追加内容** — 向已有页面继续追加 Markdown 内容
 - 🎨 **美观排版** — 标题、列表、callout、代码块、折叠块等丰富格式
 
 ## 安装
@@ -70,7 +70,17 @@ echo 'export NOTION_API_KEY="你的API_KEY"' >> ~/.bashrc && source ~/.bashrc
 帮我在 Notion 创建一个笔记，标题是"会议记录"
 搜索 Notion 中包含"项目"的页面
 把我们刚才的讨论整理成 Notion 文档
+把复盘文档放到 Notion 的"研究/策略/均线系统"目录下
 ```
+
+## 标准用法
+
+- 对常规 Notion 操作，智能体应直接调用仓库内现成脚本，而不是重写新的 JS 脚本
+- 长文档应先写入临时 Markdown 文件，再调用 `node scripts/create_note_from_file.js "标题" "/absolute/path/to/file.md"`
+- 如果用户指定了目录、栏目、分类或多级路径，应使用路径脚本，例如 `node scripts/create_note_from_file_in_path.js "研究/策略/均线系统" "复盘" "/absolute/path/to/file.md"`
+- 如需提前补齐目录，可先执行 `node scripts/ensure_path.js "研究/策略/均线系统"`
+- 追加到已有页面时，优先使用 page ID；如果标题可能重名，先用 `node scripts/search.js "关键词"` 查询
+- 当前标准脚本覆盖路径规划、创建、搜索、追加；超出这几个范围的操作，不建议由智能体临时生成新 Notion 脚本
 
 ## 技术特点
 
