@@ -16,11 +16,22 @@
 ## 安装
 
 ```bash
-npx skills add 75002425/notion-helper -g --agent '*' -y
+npx skills add 75002425/notion-helper -g
 ```
 
 - `-g` 全局安装（用户级）
-- `--agent '*'` 关联到所有 AI 代理
+- 安装到当前代理的标准全局技能目录，可在所有项目中使用
+- 具体目录由 `skills` 根据当前代理决定，例如 `~/.claude/skills/` 或 `~/.agents/skills/`
+
+## 升级
+
+已安装 `notion-helper` 的用户，重复执行同一条命令即可升级：
+
+```bash
+npx skills add 75002425/notion-helper -g
+```
+
+`skills` 会检测现有安装并更新到最新版本。
 
 ## 配置
 

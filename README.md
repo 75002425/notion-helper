@@ -16,11 +16,22 @@ Secure Notion integration tool with zero external dependencies (pure Node.js bui
 ## Installation
 
 ```bash
-npx skills add 75002425/notion-helper -g --agent '*' -y
+npx skills add 75002425/notion-helper -g
 ```
 
 - `-g` Global installation (user-level)
-- `--agent '*'` Associate with all AI agents
+- Installs to the current agent's standard global skills directory and works across projects
+- The exact path is determined by `skills` for the active agent, such as `~/.claude/skills/` or `~/.agents/skills/`
+
+## Upgrade
+
+Re-run the same command to upgrade `notion-helper`:
+
+```bash
+npx skills add 75002425/notion-helper -g
+```
+
+`skills` will detect the existing installation and update it to the latest version.
 
 ## Configuration
 

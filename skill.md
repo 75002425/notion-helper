@@ -7,6 +7,16 @@ description: Notion integration tool for creating notes, generating docs, organi
 
 Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for efficient Notion workspace management.
 
+## Installation and Upgrade
+
+Recommended global install:
+
+```bash
+npx skills add 75002425/notion-helper -g
+```
+
+Re-run the same command to upgrade `notion-helper`. `skills` will detect the existing installation and update it to the latest version.
+
 ## AI Agent Execution Guide
 
 **IMPORTANT: This section defines exactly how AI agents must use this skill. Follow these steps precisely.**
