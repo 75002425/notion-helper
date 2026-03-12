@@ -1,17 +1,17 @@
 # notion-helper
 
-Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for managing Notion workspace in any AI agent.
+Secure Notion integration tool with zero external dependencies (pure Node.js built-in modules) for managing a Notion workspace from any AI agent.
 
 [中文文档](./README_CN.md)
 
 ## Features
 
-- 📝 **Write Notes** — Quickly create Notion pages
-- 📄 **Conversation to Document** — Organize conversations into structured Notion documents
-- 📂 **Path Planning** — Create nested child page paths under the authorized root page
-- 🔍 **Search** — Search pages and databases in workspace
-- ✏️ **Append Content** — Add Markdown content to an existing page
-- 🎨 **Beautiful Formatting** — Rich formats including headings, lists, callouts, code blocks, toggles, etc.
+- Write Notion pages with pure Node.js
+- Search, append, move, and archive pages
+- Plan and create nested page paths under the authorized root page
+- Render beautified documents from Markdown instead of dumping raw paragraph blocks
+- Support exact-layout structured documents from JSON
+- Work across agents after a single global install
 
 ## Installation
 
@@ -19,75 +19,122 @@ Secure Notion integration tool with zero external dependencies (pure Node.js bui
 npx skills add 75002425/notion-helper -g
 ```
 
-- `-g` Global installation (user-level)
-- Installs to the current agent's standard global skills directory and works across projects
-- The exact path is determined by `skills` for the active agent, such as `~/.claude/skills/` or `~/.agents/skills/`
+- `-g` installs the skill globally for the current agent
+- The exact install directory is decided by `skills`, such as `~/.claude/skills/` or `~/.agents/skills/`
 
 ## Upgrade
 
-Re-run the same command to upgrade `notion-helper`:
+Re-run the same command:
 
 ```bash
 npx skills add 75002425/notion-helper -g
 ```
 
-`skills` will detect the existing installation and update it to the latest version.
+`skills` will detect the existing installation and upgrade it to the latest version.
+
+## What Changed
+
+`notion-helper` is no longer just a Markdown-to-block converter. Long-form documents now go through a document design layer and a Notion renderer:
+
+- Markdown files can include front matter for document metadata
+- Semantic sections such as summary, key findings, risks, next actions, references, and appendix are recognized automatically
+- Supported document types include `note`, `research`, `meeting-notes`, `decision-log`, `weekly-report`, `knowledge-card`, `plan`, and `report`
+- Structured JSON specs are supported when exact layout control is required
+
+## Directory Planning
+
+Use the page tree before creating a new path:
+
+```bash
+node scripts/inspect_tree.js --max-depth 3 --keyword "memory"
+```
+
+Then keep the final path shallow and reusable:
+
+- Reuse an existing branch when possible
+- Prefer `Research/OpenClaw` plus a clear page title over a 4-level topic stack
+- Stay within 1-2 levels below root unless the user explicitly wants a deeper taxonomy
+
+## Common Commands
+
+Create a short note:
+
+```bash
+node scripts/create_note.js "Meeting Notes" "Markdown content" --type note
+```
+
+Create a long, beautified document from Markdown:
+
+```bash
+node scripts/create_note_from_file.js "Weekly Memory Review" "/absolute/path/to/review.md" --type weekly-report --tags memory,openclaw
+```
+
+Create a long document in a nested path:
+
+```bash
+node scripts/create_note_from_file_in_path.js "Research/OpenClaw" "Skill Review" "/absolute/path/to/review.md" --type research
+```
+
+Create an exact-layout document from JSON:
+
+```bash
+node scripts/create_structured_note_from_file_in_path.js "Research/OpenClaw" "/absolute/path/to/spec.json"
+```
+
+Move a page after creation:
+
+```bash
+node scripts/move_page.js "page-id-or-title" "Research/OpenClaw"
+```
+
+## Markdown Front Matter
+
+The Markdown file-based create scripts accept simple front matter:
+
+```yaml
+---
+doc_type: decision-log
+summary: Start with one durable memory skill and keep the stack small.
+status: Draft
+owner: Codex
+updated_at: 2026-03-11
+tags: memory, openclaw
+---
+```
 
 ## Configuration
 
 ### 1. Get Notion API Key
 
 1. Log in to Notion and visit https://www.notion.so/my-integrations
-2. Find the **"Internal integrations"** button at the bottom of the left sidebar
-3. Click **"+ New integration"** in the top right
-4. Fill in the integration name (e.g., `agent` or `notion-helper`)
-5. Select the associated workspace
-6. In the **"Capabilities"** section, check permissions:
-   - ✅ Read content
-   - ✅ Update content
-   - ✅ Insert content
-7. Click **"Submit"** and copy the generated **Internal Integration Secret** (starts with `ntn_`)
+2. Create a new internal integration
+3. Enable Read, Update, and Insert capabilities
+4. Copy the generated Internal Integration Secret
 
 ### 2. Set Environment Variable
 
 **Windows (PowerShell):**
+
 ```powershell
 [System.Environment]::SetEnvironmentVariable('NOTION_API_KEY', 'your_api_key', 'User')
 ```
 
 **Linux / Mac:**
+
 ```bash
 echo 'export NOTION_API_KEY="your_api_key"' >> ~/.bashrc && source ~/.bashrc
 ```
 
 ### 3. Authorize Pages
 
-On the Notion page you want to access: Click `···` → **Add connections** → Select your integration → Confirm
+On the Notion page you want to access: click `...` -> **Add connections** -> select your integration -> confirm.
 
-## Usage Examples
+## Technical Notes
 
-```
-Create a note in Notion with title "Meeting Notes"
-Search for pages containing "project" in Notion
-Organize our discussion into a Notion document
-Put the review doc under the Notion path "Research/Strategy/Moving Average"
-```
-
-## Standard Usage
-
-- For normal Notion tasks, agents should call the provided scripts directly instead of writing new JS code
-- Long documents should be written to a temporary Markdown file and then created with `node scripts/create_note_from_file.js "Title" "/absolute/path/to/file.md"`
-- If the user specifies a category, section, folder-like structure, or nested path, use the path-aware scripts such as `node scripts/create_note_from_file_in_path.js "Research/Strategy/Moving Average" "Review" "/absolute/path/to/file.md"`
-- To pre-create or normalize a nested path, run `node scripts/ensure_path.js "Research/Strategy/Moving Average"`
-- When appending to an existing page, prefer page ID; if the title may be ambiguous, run `node scripts/search.js "keyword"` first
-- The current standard script set covers path planning, create, search, and append. If a request falls outside those operations, agents should not improvise by generating new Notion scripts
-
-## Technical Features
-
-- **Zero Dependencies** — Pure Node.js built-in modules (https), no npm install required
-- **Auto Retry** — Network requests with automatic retry and exponential backoff
-- **Cross-platform** — Windows / Linux / Mac fully supported
-- **Multi-agent** — Works with all AI agents (Claude Code, Cursor, Qwen Code, etc.) after installation
+- Zero dependencies
+- Automatic retry with exponential backoff
+- Windows / Linux / Mac support
+- Compatible with multiple coding agents after installation
 
 ## License
 

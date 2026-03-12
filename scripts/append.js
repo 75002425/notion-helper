@@ -5,6 +5,7 @@
  */
 const NotionAPI = require('./notion_api.js');
 const { textToBlocks } = require('./formatter.js');
+const { resolvePageReference } = require('./page_utils.js');
 
 const pageIdOrTitle = process.argv[2];
 const content = process.argv[3];
@@ -16,17 +17,8 @@ if (!pageIdOrTitle || !content) {
 
 (async () => {
   const api = new NotionAPI();
-  let pageId = pageIdOrTitle;
-
-  // If not a UUID, search by title
-  if (!/^[a-f0-9-]{32,36}$/i.test(pageIdOrTitle)) {
-    const result = await api.search(pageIdOrTitle, 'page', 5);
-    if (!result.results || result.results.length === 0) {
-      console.error('No matching page found');
-      process.exit(1);
-    }
-    pageId = result.results[0].id;
-  }
+  const page = await resolvePageReference(api, pageIdOrTitle);
+  const pageId = page.id;
 
   const blocks = textToBlocks(content);
 

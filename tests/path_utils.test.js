@@ -10,6 +10,13 @@ test('splitPagePath trims segments and drops empty items', () => {
   );
 });
 
+test('splitPagePath removes adjacent duplicate levels', () => {
+  assert.deepEqual(
+    splitPagePath('Research/Research/OpenClaw/openclaw/Notes'),
+    ['Research', 'OpenClaw', 'Notes']
+  );
+});
+
 test('splitPagePath rejects empty paths', () => {
   assert.throws(() => splitPagePath('  /  //   '), /Path must contain at least one page name/);
 });

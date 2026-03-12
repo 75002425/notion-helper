@@ -37,6 +37,24 @@ function rich(text, options = {}) {
 }
 
 /**
+ * Build a standard Notion block with rich_text.
+ * @param {string} type - Block type
+ * @param {Array} richText - Rich text array
+ * @param {Object} extra - Extra block properties
+ * @returns {Object} Notion block
+ */
+function createRichTextBlock(type, richText, extra = {}) {
+  return {
+    object: 'block',
+    type,
+    [type]: {
+      rich_text: richText,
+      ...extra,
+    },
+  };
+}
+
+/**
  * Parse inline Markdown formatting into Notion rich_text array
  * Supports: **bold**, *italic*, `code`, [text](url)
  * @param {string} text - Markdown line text
@@ -44,15 +62,14 @@ function rich(text, options = {}) {
  */
 function parseInlineFormatting(text) {
   const richTexts = [];
-  // Match: **bold**, *italic*, `code`, [text](url)
+  const safeText = String(text || '');
   const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = regex.exec(text)) !== null) {
-    // Plain text before match
+  while ((match = regex.exec(safeText)) !== null) {
     if (match.index > lastIndex) {
-      richTexts.push(rich(text.slice(lastIndex, match.index)));
+      richTexts.push(rich(safeText.slice(lastIndex, match.index)));
     }
 
     if (match[2]) {
@@ -68,14 +85,12 @@ function parseInlineFormatting(text) {
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining plain text
-  if (lastIndex < text.length) {
-    richTexts.push(rich(text.slice(lastIndex)));
+  if (lastIndex < safeText.length) {
+    richTexts.push(rich(safeText.slice(lastIndex)));
   }
 
-  // Return original text if no matches
   if (richTexts.length === 0) {
-    richTexts.push(rich(text));
+    richTexts.push(rich(safeText));
   }
 
   return richTexts;
@@ -91,36 +106,33 @@ function parseTable(tableLines) {
 
   for (const line of tableLines) {
     const trimmed = line.trim();
-    // Skip separator row |---|---|
     if (/^\|[\s\-:|]+\|$/.test(trimmed)) continue;
 
     const cells = trimmed
       .replace(/^\|/, '')
       .replace(/\|$/, '')
       .split('|')
-      .map(c => c.trim());
+      .map(cell => cell.trim());
 
     rows.push({
       type: 'table_row',
       table_row: {
-        cells: cells.map(cell => [{ type: 'text', text: { content: cell } }])
-      }
+        cells: cells.map(cell => [{ type: 'text', text: { content: cell } }]),
+      },
     });
   }
 
   if (rows.length === 0) return null;
 
-  const columnCount = rows[0].table_row.cells.length;
-
   return {
     object: 'block',
     type: 'table',
     table: {
-      table_width: columnCount,
+      table_width: rows[0].table_row.cells.length,
       has_column_header: true,
       has_row_header: false,
-      children: rows
-    }
+      children: rows,
+    },
   };
 }
 
@@ -129,23 +141,23 @@ function parseTable(tableLines) {
  * Notion only accepts a specific set of language identifiers for code blocks.
  */
 const LANG_MAP = {
-  'jsx': 'javascript',
-  'tsx': 'typescript',
-  'sh': 'bash',
-  'zsh': 'bash',
-  'yml': 'yaml',
-  'objc': 'objective-c',
-  'cs': 'c#',
-  'cpp': 'c++',
-  'fs': 'f#',
-  'py': 'python',
-  'rb': 'ruby',
-  'rs': 'rust',
-  'kt': 'kotlin',
-  'tf': 'hcl',
-  'dockerfile': 'docker',
-  'text': 'plain text',
-  'txt': 'plain text',
+  jsx: 'javascript',
+  tsx: 'typescript',
+  sh: 'bash',
+  zsh: 'bash',
+  yml: 'yaml',
+  objc: 'objective-c',
+  cs: 'c#',
+  cpp: 'c++',
+  fs: 'f#',
+  py: 'python',
+  rb: 'ruby',
+  rs: 'rust',
+  kt: 'kotlin',
+  tf: 'hcl',
+  dockerfile: 'docker',
+  text: 'plain text',
+  txt: 'plain text',
   '': 'plain text',
 };
 
@@ -155,137 +167,45 @@ const LANG_MAP = {
  * @returns {string} Notion-supported language
  */
 function normalizeLang(lang) {
-  const lower = (lang || '').toLowerCase().trim();
+  const lower = String(lang || '').toLowerCase().trim();
   return LANG_MAP[lower] || lower || 'plain text';
 }
 
 /**
- * Convert Markdown text to Notion block array
- *
- * Supported formats:
- * - # / ## / ###  → heading_1 / heading_2 / heading_3
- * - - or *        → bulleted_list_item
- * - 1. 2. 3.     → numbered_list_item
- * - > quote       → quote
- * - --- or ***    → divider
- * - ```lang```    → code block
- * - | col | ...   → table
- * - other         → paragraph
- *
- * @param {string} text - Markdown text
- * @returns {Array} Notion block array
+ * Create a paragraph block.
+ * @param {string} text - Paragraph content
+ * @returns {Object} Paragraph block
  */
-function textToBlocks(text) {
-  const lines = text.trim().split('\n');
-  const blocks = [];
-  let i = 0;
+function createParagraph(text) {
+  return createRichTextBlock('paragraph', parseInlineFormatting(text));
+}
 
-  while (i < lines.length) {
-    const line = lines[i];
-    const stripped = line.trim();
+/**
+ * Create a bulleted list item block.
+ * @param {string} text - Item text
+ * @returns {Object} Bulleted list block
+ */
+function createBulletedListItem(text) {
+  return createRichTextBlock('bulleted_list_item', parseInlineFormatting(text));
+}
 
-    // Skip empty lines
-    if (!stripped) {
-      i++;
-      continue;
-    }
+/**
+ * Create a numbered list item block.
+ * @param {string} text - Item text
+ * @returns {Object} Numbered list block
+ */
+function createNumberedListItem(text) {
+  return createRichTextBlock('numbered_list_item', parseInlineFormatting(text));
+}
 
-    // Fenced code block ```
-    if (stripped.startsWith('```')) {
-      const lang = normalizeLang(stripped.slice(3));
-      const codeLines = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      i++; // Skip closing ```
-      blocks.push(createCodeBlock(codeLines.join('\n'), lang));
-      continue;
-    }
-
-    // Table (consecutive lines starting with |)
-    if (stripped.startsWith('|')) {
-      const tableLines = [];
-      while (i < lines.length && lines[i].trim().startsWith('|')) {
-        tableLines.push(lines[i]);
-        i++;
-      }
-      const table = parseTable(tableLines);
-      if (table) blocks.push(table);
-      continue;
-    }
-
-    // Divider
-    if (['---', '***', '___'].includes(stripped)) {
-      blocks.push(createDivider());
-      i++;
-      continue;
-    }
-
-    // Headings
-    if (stripped.startsWith('### ')) {
-      blocks.push(createHeading(3, stripped.slice(4)));
-      i++;
-      continue;
-    }
-    if (stripped.startsWith('## ')) {
-      blocks.push(createHeading(2, stripped.slice(3)));
-      i++;
-      continue;
-    }
-    if (stripped.startsWith('# ')) {
-      blocks.push(createHeading(1, stripped.slice(2)));
-      i++;
-      continue;
-    }
-
-    // Blockquote
-    if (stripped.startsWith('> ')) {
-      blocks.push(createQuote(stripped.slice(2)));
-      i++;
-      continue;
-    }
-
-    // Ordered list: matches "1.", "2.", ... "99." etc.
-    const orderedMatch = stripped.match(/^(\d+)[.)]\s+(.+)/);
-    if (orderedMatch) {
-      blocks.push({
-        object: 'block',
-        type: 'numbered_list_item',
-        numbered_list_item: {
-          rich_text: parseInlineFormatting(orderedMatch[2])
-        }
-      });
-      i++;
-      continue;
-    }
-
-    // Unordered list
-    if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
-      blocks.push({
-        object: 'block',
-        type: 'bulleted_list_item',
-        bulleted_list_item: {
-          rich_text: parseInlineFormatting(stripped.slice(2))
-        }
-      });
-      i++;
-      continue;
-    }
-
-    // Paragraph (default)
-    blocks.push({
-      object: 'block',
-      type: 'paragraph',
-      paragraph: {
-        rich_text: parseInlineFormatting(stripped)
-      }
-    });
-    i++;
-  }
-
-  return blocks;
+/**
+ * Create a to-do block.
+ * @param {string} text - To-do text
+ * @param {boolean} checked - Whether item is completed
+ * @returns {Object} To-do block
+ */
+function createTodoItem(text, checked = false) {
+  return createRichTextBlock('to_do', parseInlineFormatting(text), { checked });
 }
 
 /**
@@ -296,13 +216,7 @@ function textToBlocks(text) {
  */
 function createHeading(level, text) {
   const key = `heading_${level}`;
-  return {
-    object: 'block',
-    type: key,
-    [key]: {
-      rich_text: [{ type: 'text', text: { content: text } }]
-    }
-  };
+  return createRichTextBlock(key, [{ type: 'text', text: { content: text } }]);
 }
 
 /**
@@ -313,14 +227,25 @@ function createHeading(level, text) {
  * @returns {Object} Callout block
  */
 function createCallout(text, emoji = '💡', color = 'default') {
+  return createCalloutFromRichText(parseInlineFormatting(text), emoji, color);
+}
+
+/**
+ * Create a callout block from rich text.
+ * @param {Array} richText - Rich text content
+ * @param {string} emoji - Emoji icon
+ * @param {string} color - Color
+ * @returns {Object} Callout block
+ */
+function createCalloutFromRichText(richText, emoji = '💡', color = 'default') {
   return {
     object: 'block',
     type: 'callout',
     callout: {
-      rich_text: [{ type: 'text', text: { content: text } }],
+      rich_text: richText,
       icon: { type: 'emoji', emoji },
-      color
-    }
+      color,
+    },
   };
 }
 
@@ -333,10 +258,11 @@ function createCallout(text, emoji = '💡', color = 'default') {
  */
 function createCodeBlock(code, language = 'javascript') {
   const chunks = [];
-  const MAX_LEN = 2000;
+  const safeCode = String(code || '');
+  const maxLen = 2000;
 
-  for (let i = 0; i < code.length; i += MAX_LEN) {
-    chunks.push({ type: 'text', text: { content: code.slice(i, i + MAX_LEN) } });
+  for (let i = 0; i < safeCode.length; i += maxLen) {
+    chunks.push({ type: 'text', text: { content: safeCode.slice(i, i + maxLen) } });
   }
 
   if (chunks.length === 0) {
@@ -348,8 +274,8 @@ function createCodeBlock(code, language = 'javascript') {
     type: 'code',
     code: {
       rich_text: chunks,
-      language
-    }
+      language,
+    },
   };
 }
 
@@ -369,7 +295,7 @@ function createToc() {
   return {
     object: 'block',
     type: 'table_of_contents',
-    table_of_contents: { color: 'gray' }
+    table_of_contents: { color: 'gray' },
   };
 }
 
@@ -385,8 +311,8 @@ function createToggle(title, children) {
     type: 'toggle',
     toggle: {
       rich_text: [{ type: 'text', text: { content: title } }],
-      children
-    }
+      children,
+    },
   };
 }
 
@@ -400,8 +326,8 @@ function createQuote(text) {
     object: 'block',
     type: 'quote',
     quote: {
-      rich_text: [{ type: 'text', text: { content: text } }]
-    }
+      rich_text: [{ type: 'text', text: { content: text } }],
+    },
   };
 }
 
@@ -415,7 +341,7 @@ function createBookmark(url, caption = '') {
   const block = {
     object: 'block',
     type: 'bookmark',
-    bookmark: { url }
+    bookmark: { url },
   };
 
   if (caption) {
@@ -425,17 +351,135 @@ function createBookmark(url, caption = '') {
   return block;
 }
 
+/**
+ * Convert Markdown text to Notion block array.
+ *
+ * Supported formats:
+ * - # / ## / ###  -> heading_1 / heading_2 / heading_3
+ * - - or *        -> bulleted_list_item
+ * - 1. 2. 3.      -> numbered_list_item
+ * - > quote       -> quote
+ * - --- or ***    -> divider
+ * - ```lang```    -> code block
+ * - | col | ...   -> table
+ * - other         -> paragraph
+ *
+ * @param {string} text - Markdown text
+ * @returns {Array} Notion block array
+ */
+function textToBlocks(text) {
+  const safeText = String(text || '').trim();
+  if (!safeText) {
+    return [];
+  }
+
+  const lines = safeText.split('\n');
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const stripped = line.trim();
+
+    if (!stripped) {
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('```')) {
+      const lang = normalizeLang(stripped.slice(3));
+      const codeLines = [];
+      i += 1;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i += 1;
+      }
+      i += 1;
+      blocks.push(createCodeBlock(codeLines.join('\n'), lang));
+      continue;
+    }
+
+    if (stripped.startsWith('|')) {
+      const tableLines = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i]);
+        i += 1;
+      }
+      const table = parseTable(tableLines);
+      if (table) {
+        blocks.push(table);
+      }
+      continue;
+    }
+
+    if (['---', '***', '___'].includes(stripped)) {
+      blocks.push(createDivider());
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('### ')) {
+      blocks.push(createHeading(3, stripped.slice(4)));
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('## ')) {
+      blocks.push(createHeading(2, stripped.slice(3)));
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('# ')) {
+      blocks.push(createHeading(1, stripped.slice(2)));
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('> ')) {
+      blocks.push(createQuote(stripped.slice(2)));
+      i += 1;
+      continue;
+    }
+
+    const orderedMatch = stripped.match(/^(\d+)[.)]\s+(.+)/);
+    if (orderedMatch) {
+      blocks.push(createNumberedListItem(orderedMatch[2]));
+      i += 1;
+      continue;
+    }
+
+    if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
+      blocks.push(createBulletedListItem(stripped.slice(2)));
+      i += 1;
+      continue;
+    }
+
+    blocks.push(createParagraph(stripped));
+    i += 1;
+  }
+
+  return blocks;
+}
+
 module.exports = {
   rich,
+  createRichTextBlock,
   parseInlineFormatting,
   parseTable,
+  normalizeLang,
   textToBlocks,
+  createParagraph,
+  createBulletedListItem,
+  createNumberedListItem,
+  createTodoItem,
   createHeading,
   createCallout,
+  createCalloutFromRichText,
   createCodeBlock,
   createDivider,
   createToc,
   createToggle,
   createQuote,
-  createBookmark
+  createBookmark,
 };

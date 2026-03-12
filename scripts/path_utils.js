@@ -5,10 +5,18 @@
  * @returns {string[]} Path segments
  */
 function splitPagePath(pagePath) {
-  const segments = String(pagePath || '')
+  const rawSegments = String(pagePath || '')
     .split(/[\\/]/)
     .map(segment => segment.trim())
     .filter(Boolean);
+
+  const segments = rawSegments.filter((segment, index) => {
+    if (index === 0) {
+      return true;
+    }
+
+    return segment.toLowerCase() !== rawSegments[index - 1].toLowerCase();
+  });
 
   if (segments.length === 0) {
     throw new Error('Path must contain at least one page name.');
